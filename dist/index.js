@@ -1,42 +1,24 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.guardarArchivoEnBaseDatos = exports.obtenerNombreBase = exports.obtenerVersion = exports.leerArchivos = void 0;
-const fs = __importStar(require("fs"));
-const path = __importStar(require("path"));
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const commander_1 = require("commander");
-const mysql = __importStar(require("mysql2"));
-const dotenv = __importStar(require("dotenv"));
-dotenv.config();
+const mysql2_1 = __importDefault(require("mysql2"));
+const dotenv_1 = __importDefault(require("dotenv"));
+let archivosProcesados = 0;
+let totalArchivos = 0;
+dotenv_1.default.config();
 // Configuración de conexión a la base de datos MySQL
-const connection = mysql.createConnection({
+const connection = mysql2_1.default.createConnection({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_DATABASE,
-    port: Number(process.env.DB_PORT)
+    port: Number(process.env.DB_PORT) || 3306,
 });
 // Parsear los argumentos de la línea de comandos
 commander_1.program.option('-d, --dir <directorio>', 'Directorio raíz');
@@ -44,25 +26,59 @@ commander_1.program.parse(process.argv);
 // Obtener el directorio raíz del flag --dir o utilizar uno por defecto
 const directorioRaiz = commander_1.program.opts().dir;
 if (!directorioRaiz) {
-    throw new Error('Debes especificar el directo raiz: --dir <directorio>.');
+    throw new Error('Debes especificar el directorio raíz: --dir <directorio>.');
+}
+function contarArchivos(dir) {
+    const archivos = fs_1.default.readdirSync(dir);
+    console.log(`Archivos encontrados en el directorio ${dir}:`, archivos.length);
+    const archivosConVersiones = {};
+    for (const archivo of archivos) {
+        const rutaCompleta = path_1.default.join(dir, archivo);
+        const estadisticas = fs_1.default.statSync(rutaCompleta);
+        if (estadisticas.isDirectory()) {
+            contarArchivos(rutaCompleta); // Llamada recursiva para contar archivos en subdirectorios
+        }
+        else {
+            if (path_1.default.extname(archivo) === '.flp') {
+                const nombreArchivo = path_1.default.basename(archivo, path_1.default.extname(archivo));
+                const nombreBase = obtenerNombreBase(nombreArchivo);
+                const version = obtenerVersion(nombreArchivo);
+                if (!archivosConVersiones[nombreBase] || version > archivosConVersiones[nombreBase]) {
+                    archivosConVersiones[nombreBase] = version;
+                    totalArchivos++;
+                }
+            }
+        }
+    }
+}
+function mostrarProgreso() {
+    const porcentaje = totalArchivos !== 0 ? ((archivosProcesados / totalArchivos) * 100).toFixed(2) : '0.00';
+    console.log(`Progreso: ${archivosProcesados}/${totalArchivos} (${porcentaje}%)`);
+    if (archivosProcesados === totalArchivos) {
+        console.log('¡Proceso completado!');
+        // Terminar el script
+        process.exit();
+    }
 }
 /**
  * Función para recorrer los archivos y carpetas de forma recursiva.
  *
- * @param   {string}  dir  [dir description]
- * @return  {void}         [return description]
+ * @param dir Directorio raíz
  */
 function leerArchivos(dir) {
-    const archivos = fs.readdirSync(dir);
+    const archivos = fs_1.default.readdirSync(dir);
     const archivosConVersiones = {};
     for (const archivo of archivos) {
-        const rutaCompleta = path.join(dir, archivo);
-        const estadisticas = fs.statSync(rutaCompleta);
+        const rutaCompleta = path_1.default.join(dir, archivo);
+        const estadisticas = fs_1.default.statSync(rutaCompleta);
         if (estadisticas.isDirectory()) {
             leerArchivos(rutaCompleta); // Llamada recursiva para leer subdirectorios
         }
         else {
-            const nombreArchivo = path.basename(archivo, path.extname(archivo));
+            if (path_1.default.extname(archivo) !== '.flp') {
+                continue; // Ignorar archivos que no tengan la extensión .flp
+            }
+            const nombreArchivo = path_1.default.basename(archivo, path_1.default.extname(archivo));
             const version = obtenerVersion(nombreArchivo);
             if (version > 0) {
                 const nombreBase = obtenerNombreBase(nombreArchivo);
@@ -92,7 +108,7 @@ function obtenerVersion(nombreArchivo) {
     if (versionMatch) {
         return parseInt(versionMatch[1]);
     }
-    return 0;
+    return 1;
 }
 exports.obtenerVersion = obtenerVersion;
 // Función para obtener el nombre base del archivo sin la versión
@@ -102,7 +118,7 @@ function obtenerNombreBase(nombreArchivo) {
 exports.obtenerNombreBase = obtenerNombreBase;
 // Función para guardar el archivo en la base de datos
 function guardarArchivoEnBaseDatos(rutaArchivo, nombreArchivo, version) {
-    const rutaRelativa = path.relative(directorioRaiz, rutaArchivo);
+    const rutaRelativa = path_1.default.relative(directorioRaiz, rutaArchivo);
     const consultaExistencia = 'SELECT id FROM projects WHERE ruta = ?';
     connection.query(consultaExistencia, [rutaRelativa], (err, result) => {
         if (err) {
@@ -117,7 +133,12 @@ function guardarArchivoEnBaseDatos(rutaArchivo, nombreArchivo, version) {
                     console.error('Error al actualizar el archivo en la base de datos:', err);
                 }
                 else {
+                    archivosProcesados++;
+                    mostrarProgreso();
                     console.log(`Archivo "${nombreArchivo}" (versión ${version}) actualizado en la base de datos.`);
+                    if (archivosProcesados === totalArchivos) {
+                        connection.end(); // Cerrar la conexión de la base de datos una vez que se procesen todos los archivos
+                    }
                 }
             });
         }
@@ -129,7 +150,12 @@ function guardarArchivoEnBaseDatos(rutaArchivo, nombreArchivo, version) {
                     console.error('Error al guardar el archivo en la base de datos:', err);
                 }
                 else {
+                    archivosProcesados++;
+                    mostrarProgreso();
                     console.log(`Archivo "${nombreArchivo}" (versión ${version}) guardado en la base de datos.`);
+                    if (archivosProcesados === totalArchivos) {
+                        connection.end(); // Cerrar la conexión de la base de datos una vez que se procesen todos los archivos
+                    }
                 }
             });
         }
@@ -159,9 +185,11 @@ connection.connect(function (err) {
         return;
     }
     console.log(`Conexión establecida con la base de datos MySQL: ${connection.threadId}.`);
+    // Llamada inicial para contar los archivos antes de comenzar el procesamiento
+    contarArchivos(directorioRaiz);
     // Crear la tabla si no existe
     crearTablaSiNoExiste();
     // Llamada inicial para leer los archivos desde el directorio raíz
-    leerArchivos(directorioRaiz);
+    // leerArchivos(directorioRaiz);
 });
 //# sourceMappingURL=index.js.map
