@@ -1,0 +1,25 @@
+{
+  "name": "fl-studio-projects",
+  "version": "1.0.0",
+  "description": "Get all the fl studio projects in a directory to save the metadata in a database.",
+  "main": "dist/index.js",
+  "author": "Anthuan Vasquez <me@anthuanvasquez.net>",
+  "license": "MIT",
+  "private": true,
+  "dependencies": {
+    "mysql": "^2.18.1"
+  },
+  "devDependencies": {
+    "@types/mysql": "^2.15.21",
+    "@types/node": "^20.4.2",
+    "commander": "^11.0.0",
+    "jest": "^29.6.1",
+    "typescript": "^5.1.6",
+    "dotenv": "^16.3.1"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "jest"
+  }
+}
