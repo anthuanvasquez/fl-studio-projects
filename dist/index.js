@@ -30,26 +30,30 @@ if (!directorioRaiz) {
 }
 function contarArchivos(dir) {
     const archivos = fs_1.default.readdirSync(dir);
-    console.log(`Archivos encontrados en el directorio ${dir}:`, archivos.length);
+    let archivosContados = 0;
     const archivosConVersiones = {};
     for (const archivo of archivos) {
         const rutaCompleta = path_1.default.join(dir, archivo);
         const estadisticas = fs_1.default.statSync(rutaCompleta);
         if (estadisticas.isDirectory()) {
-            contarArchivos(rutaCompleta); // Llamada recursiva para contar archivos en subdirectorios
+            archivosContados += contarArchivos(rutaCompleta); // Llamada recursiva para contar archivos en subdirectorios
         }
         else {
             if (path_1.default.extname(archivo) === '.flp') {
                 const nombreArchivo = path_1.default.basename(archivo, path_1.default.extname(archivo));
-                const nombreBase = obtenerNombreBase(nombreArchivo);
                 const version = obtenerVersion(nombreArchivo);
-                if (!archivosConVersiones[nombreBase] || version > archivosConVersiones[nombreBase]) {
-                    archivosConVersiones[nombreBase] = version;
-                    totalArchivos++;
+                if (version > 0) {
+                    const nombreBase = obtenerNombreBase(nombreArchivo);
+                    if (!archivosConVersiones[nombreBase] ||
+                        version > archivosConVersiones[nombreBase]) {
+                        archivosConVersiones[nombreBase] = version;
+                        archivosContados++;
+                    }
                 }
             }
         }
     }
+    return archivosContados;
 }
 function mostrarProgreso() {
     const porcentaje = totalArchivos !== 0 ? ((archivosProcesados / totalArchivos) * 100).toFixed(2) : '0.00';
@@ -96,6 +100,7 @@ function leerArchivos(dir) {
             }
         }
     }
+    totalArchivos += Object.keys(archivosConVersiones).length;
     for (const nombreArchivo in archivosConVersiones) {
         const archivo = archivosConVersiones[nombreArchivo];
         guardarArchivoEnBaseDatos(archivo.ruta, archivo.nombre, archivo.version);
@@ -190,6 +195,6 @@ connection.connect(function (err) {
     // Crear la tabla si no existe
     crearTablaSiNoExiste();
     // Llamada inicial para leer los archivos desde el directorio raíz
-    // leerArchivos(directorioRaiz);
+    leerArchivos(directorioRaiz);
 });
 //# sourceMappingURL=index.js.map

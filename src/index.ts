@@ -29,11 +29,10 @@ if (!directorioRaiz) {
     throw new Error('Debes especificar el directorio raíz: --dir <directorio>.');
 }
 
-function contarArchivos(dir: string): void {
+export function contarArchivos(dir: string): number {
     const archivos: string[] = fs.readdirSync(dir);
 
-    console.log(`Archivos encontrados en el directorio ${dir}:`, archivos.length);
-
+    let archivosContados = 0;
     const archivosConVersiones: {
         [nombreBase: string]: number;
     } = {};
@@ -43,24 +42,32 @@ function contarArchivos(dir: string): void {
         const estadisticas = fs.statSync(rutaCompleta);
 
         if (estadisticas.isDirectory()) {
-            contarArchivos(rutaCompleta); // Llamada recursiva para contar archivos en subdirectorios
+            archivosContados += contarArchivos(rutaCompleta); // Llamada recursiva para contar archivos en subdirectorios
         } else {
             if (path.extname(archivo) === '.flp') {
                 const nombreArchivo = path.basename(archivo, path.extname(archivo));
-                const nombreBase = obtenerNombreBase(nombreArchivo);
                 const version = obtenerVersion(nombreArchivo);
 
-                if (!archivosConVersiones[nombreBase] || version > archivosConVersiones[nombreBase]) {
-                    archivosConVersiones[nombreBase] = version;
-                    totalArchivos++;
+                if (version > 0) {
+                    const nombreBase = obtenerNombreBase(nombreArchivo);
+                    if (
+                        !archivosConVersiones[nombreBase] ||
+                        version > archivosConVersiones[nombreBase]
+                    ) {
+                        archivosConVersiones[nombreBase] = version;
+                        archivosContados++;
+                    }
                 }
             }
         }
     }
+
+    return archivosContados;
 }
 
 
-function mostrarProgreso(): void {
+
+export function mostrarProgreso(): void {
     const porcentaje = totalArchivos !== 0 ? ((archivosProcesados / totalArchivos) * 100).toFixed(2) : '0.00';
     console.log(`Progreso: ${archivosProcesados}/${totalArchivos} (${porcentaje}%)`);
 
@@ -120,6 +127,8 @@ export function leerArchivos(dir: string): void {
             }
         }
     }
+
+    totalArchivos += Object.keys(archivosConVersiones).length;
 
     for (const nombreArchivo in archivosConVersiones) {
         const archivo = archivosConVersiones[nombreArchivo];
